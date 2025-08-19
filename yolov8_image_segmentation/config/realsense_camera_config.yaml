@@ -1,0 +1,21 @@
+
+serial_no: _234222301984
+
+enable_color: true
+enable_depth: true
+enable_sync: true
+
+pointcloud.enable: false
+align_depth.enable: true
+
+rgb_camera.color_profile: 640x480x30
+depth_module.depth_profile: 640x480x30
+depth_module.depth_format: Z16 
+depth_module.infra1_format: y8
+rgb_camera.color_format: BGR8
+
+
+publish_tf: true
+tf_publish_rate: 30.0
+# reconnect_timeout: 10
+clip_distance: 15.0

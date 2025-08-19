@@ -1,0 +1,22 @@
+foundation_pose:
+  ros__parameters:
+    package_name: foundation_pose
+    init_mask_topic: /foundation_pose/init_mask
+    color_camera_topic: /camera/camera/color/image_raw
+    aligned_depth_camera_topic: /camera/camera/aligned_depth_to_color/image_raw
+    foundation_pose_library_directory: Moveit_ur5e_ros2-with-cartesian-path-planning/ur5e_ws/src/vision_based_position_estimation/foundation_pose/foundation_pose/lib
+    foundation_pose_src_directory: Moveit_ur5e_ros2-with-cartesian-path-planning/ur5e_ws/src/vision_based_position_estimation/foundation_pose/foundation_pose/lib/FoundationPose
+    cutie_library_directory: Moveit_ur5e_ros2-with-cartesian-path-planning/ur5e_ws/src/vision_based_position_estimation/foundation_pose/foundation_pose/lib/Cutie
+    class_name: blue_tube
+    apply_scale: 0.01
+    force_apply_color: false
+    apply_color: [0, 159, 237]
+    activate_2d_tracker: true
+    activate_kalman_filter: false
+    kf_measurement_noise_scale: 0.05
+    est_refine_iter: 10
+    track_refine_iter: 5
+    cam_K: [387.88845825, 0.0, 323.28192139, 0.0, 387.46902466, 237.11705017, 0.0, 0.0, 1.0]
+    publish_once: true
+    base_frame: base_link
+    tool_link: tool0

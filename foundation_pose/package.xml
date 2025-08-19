@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>foundation_pose</name>
+  <version>0.0.0</version>
+  <description>Foundation Pose object position tracking</description>
+  <maintainer email="tyjun0528@gmail.com">yj0528</maintainer>
+  <license>Apache-2.0</license>
+
+  <!-- Build dependencies -->
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <!-- Python dependencies -->
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-scipy</exec_depend>
+  <exec_depend>python3-torch</exec_depend>
+  <exec_depend>python3-pip</exec_depend>
+
+  <!-- ROS 2 dependencies -->
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>cv_bridge</depend>
+  
+  <!-- RealSense dependencies -->
+  <exec_depend>librealsense2-dev</exec_depend>
+  <exec_depend>python3-pyrealsense2</exec_depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+  <exec_depend>ros2launch</exec_depend>
+
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
