@@ -17,8 +17,15 @@ To ensure the ur5e robot can be controlled via moveit2.
     *   `sudo nmcli radio wifi on` to turn on wifi
     *   Sync the time with the desktop
         ```
+        sudo systemctl unmask systemd-timesyncd
         sudo systemctl enable systemd-timesyncd    
         sudo systemctl start systemd-timesyncd
+        ```
+        or
+        ```
+        sudo systemctl unmask chrony
+        sudo systemctl enable chrony
+        sudo systemctl start chrony
         ```
     *   `timedatectl status` to check your current system time
     *   `sudo nmcli radio wifi off` to turn off wifi **(Important)**
