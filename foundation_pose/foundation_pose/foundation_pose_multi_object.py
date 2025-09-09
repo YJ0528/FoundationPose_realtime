@@ -17,7 +17,7 @@ import pyrealsense2 as rs
 import logging
 from ultralytics import YOLO
 
-from std_msgs.msg import Bool  
+from std_msgs.msg import Bool, String
 from cv_bridge import CvBridge
 import rclpy
 from rclpy.node import Node
@@ -31,11 +31,11 @@ import tf2_ros
 from tf2_ros import TransformException
 from scipy.spatial.transform import Rotation
 
-class foundationPose(Node):
+class foundationPoseMultiObject(Node):
 
     def __init__(self):
 
-        super().__init__('foundation_pose')
+        super().__init__('foundation_pose_multi_object')
         self.bridge = CvBridge()
                 
         self.get_logger().info('Initializing Foundation Pose Node...')
@@ -113,7 +113,7 @@ class foundationPose(Node):
         self.tool_frame = self.get_parameter('tool_frame').get_parameter_value().string_value
 
         # Initialize as None
-        self.est = None
+        self.est = {}
         self.tracker_2D = None
         self.kf = None
         self.pose_seq = [] 
@@ -125,15 +125,22 @@ class foundationPose(Node):
         self.draw_posed_3d_box = None
         self.draw_xyz_axis = None
         self.frame_start_time = time.time()
-        self.to_origin = None
-        self.bbox = None
-
-        self.init_foundation_pose()
+        self.to_origin = {}
+        self.bbox = {}
+        self.classes_name = []
+        self.init_mask_subscriber = {}
 
         #################################################
         # Declare subsrciber and publisher
         #################################################
-        init_mask_qos_profile = QoSProfile(
+        classes_name_qos_profile = QoSProfile(
+            reliability = QoSReliabilityPolicy.RELIABLE,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth = 1,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL
+        )
+
+        self.init_mask_qos_profile = QoSProfile(
             reliability=QoSReliabilityPolicy.RELIABLE,  # Better for networks
             history=QoSHistoryPolicy.KEEP_LAST,
             depth=1,
@@ -147,11 +154,11 @@ class foundationPose(Node):
             durability=QoSDurabilityPolicy.VOLATILE  # No persistence needed
         )
 
-        self.init_mask_subscriber = self.create_subscription(
-            sensor_msgs.msg.Image,  
-            self.init_mask_topic, 
-            self.init_mask_callback,
-            init_mask_qos_profile
+        self.classes_name_subscriber = self.create_subscription(
+            String,  
+            '/yolo_model/available_classes',
+            self.classes_name_callback,
+            classes_name_qos_profile  
         )
 
         self.color_subscriber = self.create_subscription(
@@ -173,6 +180,7 @@ class foundationPose(Node):
             'target_position',
             10  # Queue size
         )
+
         # Store latest messages
         self.latest_color = None
         self.latest_depth = None
@@ -183,11 +191,39 @@ class foundationPose(Node):
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
         
         self.timer = self.create_timer(0.02, self.process_latest_data)  # 50 Hz?
-        self.get_logger().info(f'Initialization completed ')
-
-    def init_mask_callback(self, inMsg):
         
-        self.mask = None
+
+    def classes_name_callback(self, msg):
+        try:
+            received_classes = json.loads(msg.data)        
+            self.classes_name = received_classes.copy()
+
+            for i, class_name in enumerate(self.classes_name):
+                self.get_logger().info(f"  {i}: {class_name}")
+            
+            for class_name in self.classes_name:
+                
+                topic_name = f"{self.init_mask_topic}/{class_name.replace(' ', '_').replace('-', '_')}"
+
+                self.init_mask_subscriber[class_name] = self.create_subscription(
+                    sensor_msgs.msg.Image,  
+                    topic_name, 
+                    lambda msg, cn=class_name: self.init_mask_callback(msg, cn),
+                    self.init_mask_qos_profile
+                )
+            
+            self.init_foundation_pose()
+            # self.destroy_subscription(self.classes_name_subscriber)
+            self.get_logger().info(f'Initialization completed ')
+            
+        except Exception as e:
+            self.get_logger().error(f"Error in classes_name_callback: {e}")        
+        
+
+    def init_mask_callback(self, inMsg, class_name):
+        
+        self.mask = None    
+        self.class_name = class_name
         # if not (self.depth_updated and self.color_updated): return
 
         self.frame_start_time = time.time()
@@ -217,7 +253,7 @@ class foundationPose(Node):
             #################################################
             # Foundation pose estimation
             #################################################
-            pose = self.est.register(K=self.cam_K, rgb=color, depth=depth, ob_mask=self.mask, iteration=self.est_refine_iter)
+            pose = self.est[self.class_name].register(K=self.cam_K, rgb=color, depth=depth, ob_mask=self.mask, iteration=self.est_refine_iter)
 
             pose_arr = self.get_6d_pose_arr_from_mat(pose)
             position = pose_arr[:3]
@@ -327,7 +363,7 @@ class foundationPose(Node):
                     self.kf_mean, self.kf_covariance = self.kf.update_from_xy(self.kf_mean, self.kf_covariance, measurement_xy)
                     self.est.pose_last = torch.from_numpy(self.get_mat_from_6d_pose_arr(self.kf_mean[:6])).unsqueeze(0).to(self.est.pose_last.device)
 
-                pose = self.est.track_one(rgb=color, depth=depth, K=self.cam_K, iteration= self.track_refine_iter)
+                pose = self.est[self.class_name].track_one(rgb=color, depth=depth, K=self.cam_K, iteration= self.track_refine_iter)
                 pose_arr = self.get_6d_pose_arr_from_mat(pose)
                 position = pose_arr[:3]
                 euler = pose_arr[3:]
@@ -347,8 +383,8 @@ class foundationPose(Node):
             #################################################
             # Draw box in cv2 visualization
             #################################################
-            center_pose = pose @ np.linalg.inv(self.to_origin)
-            vis_color = self.draw_posed_3d_box(self.cam_K, img=color, ob_in_cam= center_pose, bbox = self.bbox)
+            center_pose = pose @ np.linalg.inv(self.to_origin[self.class_name])
+            vis_color = self.draw_posed_3d_box(self.cam_K, img=color, ob_in_cam= center_pose, bbox = self.bbox[self.class_name])
             vis_color = self.draw_xyz_axis(
                 vis_color,
                 ob_in_cam= center_pose,
@@ -373,21 +409,12 @@ class foundationPose(Node):
         except Exception as e:
             self.get_logger().error(f"Error processing images: {str(e)}")
        
-
-        
     def init_foundation_pose(self):
 
         sys.path.append(os.path.join(os.path.expanduser('~'),self.cutie_library_directory))
         sys.path.append(os.path.join(os.path.expanduser('~'),self.foundation_pose_library_directory))
         sys.path.append(os.path.join(os.path.expanduser('~'),self.foundation_pose_src_directory))        
         
-        mesh_file_dir = os.path.join(
-            get_package_share_directory(self.package_name), 
-            "test_realtime", 
-            self.class_name, 
-            "mesh", 
-            f"{self.class_name}.stl")          
-
         self.get_logger().info(f'Initializatiing Estimators and utilities from FoundationPose...')
         from FoundationPose.estimater import trimesh_add_pure_colored_texture
         from FoundationPose.estimater import (
@@ -399,30 +426,39 @@ class foundationPose(Node):
             draw_posed_3d_box,
             draw_xyz_axis,
         )
-        self.draw_posed_3d_box = draw_posed_3d_box
-        self.draw_xyz_axis = draw_xyz_axis
-
-        self.get_logger().info(f'Loading mesh from {mesh_file_dir}...')
-        mesh = trimesh.load(os.path.abspath(mesh_file_dir))
-        if isinstance(mesh, trimesh.Scene):
-            mesh = mesh.dump(concatenate=True)
-        mesh.apply_scale(self.apply_scale)
-        if self.force_apply_color:
-            mesh = trimesh_add_pure_colored_texture(mesh, color=np.array(self.apply_color), resolution=10)
-        self.to_origin, extents = trimesh.bounds.oriented_bounds(mesh)
-        self.bbox = np.stack([-extents / 2, extents / 2], axis=0).reshape(2, 3)
 
         scorer = ScorePredictor()
         refiner = PoseRefinePredictor()
         glctx = dr.RasterizeCudaContext()
-        self.est = FoundationPose(
-            model_pts=mesh.vertices,
-            model_normals=mesh.vertex_normals,
-            mesh=mesh,
-            scorer=scorer,
-            refiner=refiner,
-            glctx=glctx,
-        )
+        self.draw_posed_3d_box = draw_posed_3d_box
+        self.draw_xyz_axis = draw_xyz_axis
+
+        for class_name in self.classes_name:
+            mesh_file_dir = os.path.join(
+                get_package_share_directory(self.package_name), 
+                "test_realtime", 
+                class_name, 
+                "mesh", 
+                f"{class_name}.stl")          
+
+            self.get_logger().info(f'Loading mesh from {mesh_file_dir}...')
+            mesh = trimesh.load(os.path.abspath(mesh_file_dir))
+            if isinstance(mesh, trimesh.Scene):
+                mesh = mesh.dump(concatenate=True)
+            mesh.apply_scale(self.apply_scale)
+            if self.force_apply_color:
+                mesh = trimesh_add_pure_colored_texture(mesh, color=np.array(self.apply_color), resolution=10)
+            self.to_origin[class_name], extents = trimesh.bounds.oriented_bounds(mesh)
+            self.bbox[class_name] = np.stack([-extents / 2, extents / 2], axis=0).reshape(2, 3)
+
+            self.est[class_name] = FoundationPose(
+                model_pts=mesh.vertices,
+                model_normals=mesh.vertex_normals,
+                mesh=mesh,
+                scorer=scorer,
+                refiner=refiner,
+                glctx=glctx,
+            )
         
         #################################################
         # Instantiate the 2D tracker
@@ -589,9 +625,9 @@ class foundationPose(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    foundation_pose = foundationPose()
+    foundation_pose_multi_object = foundationPoseMultiObject()
     try:
-        rclpy.spin(foundation_pose)
+        rclpy.spin(foundation_pose_multi_object)
     except KeyboardInterrupt:
         print('Received keyboard interrupt!')
     except ExternalShutdownException:
@@ -599,7 +635,7 @@ def main(args=None):
 
     print('Exiting...')
 
-    foundation_pose.destroy_node()
+    foundation_pose_multi_object.destroy_node()
     rclpy.try_shutdown()
     torch.cuda.empty_cache()
     cv2.destroyAllWindows()

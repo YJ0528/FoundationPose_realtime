@@ -37,6 +37,12 @@ def generate_launch_description():
         'yolov8_config.yaml'
         )
 
+    yolo_multi_object_config_file = os.path.join(
+        package_dir, 
+        'config', 
+        'yolo_image_segmentation_multi_object_config.yaml'
+        )
+
     params = rs_launch.configurable_parameters
     declare_realsense_local_params = rs_launch.declare_configurable_parameters(local_parameters)
     declare_realsense_params = rs_launch.declare_configurable_parameters(params)
@@ -60,6 +66,20 @@ def generate_launch_description():
         output='screen'
     )
 
+    yolo_multi_object_node = launch_ros.actions.Node(
+        package='yolov8_image_segmentation',
+        executable='yolo_image_segmentation_multi_object',
+        name='yolo_image_segmentation_multi_object',
+        parameters=[
+            {
+                'camera_name': LaunchConfiguration('camera_name'),
+                'camera_namespace': LaunchConfiguration('camera_namespace'),
+            },
+            yolo_multi_object_config_file
+        ],
+        output='screen'
+    )
+
     # Create LaunchDescription and add actions
     ld = LaunchDescription()
 
@@ -68,6 +88,8 @@ def generate_launch_description():
     for action in declare_realsense_params: ld.add_action(action)
     
     ld.add_action(rs_launch_setup)
-    ld.add_action(yolov8_node)
+    # ld.add_action(yolov8_node)
+    ld.add_action(yolo_multi_object_node)
+
 
     return ld

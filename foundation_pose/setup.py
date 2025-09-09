@@ -40,6 +40,7 @@ setup(
     entry_points={
         'console_scripts': [
             'foundation_pose = foundation_pose.foundation_pose:main',
+            'foundation_pose_multi_object = foundation_pose.foundation_pose_multi_object:main',
         ],
     },
 )

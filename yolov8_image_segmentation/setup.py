@@ -26,6 +26,7 @@ setup(
     entry_points={
         'console_scripts': [
             'yolov8_image_segmentation = yolov8_image_segmentation.yolov8_image_segmentation:main',
+            'yolo_image_segmentation_multi_object = yolov8_image_segmentation.yolo_image_segmentation_multi_object:main' 
         ],
     },
 )

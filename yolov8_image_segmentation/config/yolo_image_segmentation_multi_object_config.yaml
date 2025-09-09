@@ -1,8 +1,8 @@
-yolov8_image_segmentation:
+yolo_image_segmentation_multi_object:
   ros__parameters:
-    yolov8_image_segmentation:
-      class_name: blue_tube
-      yolo_model_name: "best.pt"
+    yolo_image_segmentation_multi_object:
+      default_class_name: blue_tube
+      yolo_model_name: "YOLO11_segA.pt"
       confidence_threshold: 0.9
       visualize: True
       timeout_seconds: -1

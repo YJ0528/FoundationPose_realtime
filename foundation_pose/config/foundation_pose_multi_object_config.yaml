@@ -1,4 +1,4 @@
-foundation_pose:
+foundation_pose_multi_object:
   ros__parameters:
     package_name: foundation_pose
     init_mask_topic: /foundation_pose/init_mask
