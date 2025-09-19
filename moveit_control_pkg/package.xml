@@ -4,7 +4,7 @@
   <name>moveit_control_pkg</name>
   <version>0.0.0</version>
   <description>MoveIt trajectory control for UR5e using C++ interface</description>
-  <maintainer email="bhu16300@gmail.com">ariel</maintainer>
+  <maintainer email="tyjun0528@gmail.com">ariel</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

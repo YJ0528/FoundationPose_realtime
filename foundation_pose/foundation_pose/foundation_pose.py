@@ -72,8 +72,8 @@ class foundationPose(Node):
         self.declare_parameter('init_mask_topic', '/foundation_pose/init_mask')
         self.declare_parameter('color_camera_topic', '/camera/camera/color/image_raw')
         self.declare_parameter('aligned_depth_camera_topic', '/camera/camera/aligned_depth_to_color/image_raw')
-        self.declare_parameter('class_name', 'blue_tube')
-        self.declare_parameter('apply_scale', 0.01)
+        self.declare_parameter('class_name', 'clear')
+        self.declare_parameter('apply_scale', 0.001)
         self.declare_parameter('force_apply_color', False)
         self.declare_parameter('apply_color', [0, 159, 237])
         self.declare_parameter('foundation_pose_library_directory', 'Moveit_ur5e_ros2-with-cartesian-path-planning/ur5e_ws/src/vision_based_position_estimatior/foundation_pose/foundation_pose/lib')
@@ -358,7 +358,8 @@ class foundationPose(Node):
                 transparency=0,
                 is_input_rgb=True,
             )
-            cv2.imshow("Pose Tracking", cv2.cvtColor(vis_color, cv2.COLOR_RGB2BGR))
+            cv2.imshow("Pose Tracking", vis_color)
+            # cv2.imshow("Pose Tracking", cv2.cvtColor(vis_color, cv2.COLOR_RGB2BGR))
             if cv2.waitKey(1) & 0xFF == ord('q'): return
 
             #################################################

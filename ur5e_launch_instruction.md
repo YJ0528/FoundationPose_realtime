@@ -24,8 +24,8 @@ To ensure the ur5e robot can be controlled via moveit2.
         or
         ```
         sudo systemctl unmask chrony
-        sudo systemctl enable chrony
-        sudo systemctl start chrony
+        sudo systemctl enable chronyd
+        sudo systemctl start chronyd
         ```
     *   `timedatectl status` to check your current system time
     *   `sudo nmcli radio wifi off` to turn off wifi **(Important)**

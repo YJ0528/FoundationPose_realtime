@@ -7,8 +7,8 @@ foundation_pose_multi_object:
     foundation_pose_library_directory: Moveit_ur5e_ros2-with-cartesian-path-planning/ur5e_ws/src/vision_based_position_estimatior/foundation_pose/foundation_pose/lib
     foundation_pose_src_directory: Moveit_ur5e_ros2-with-cartesian-path-planning/ur5e_ws/src/vision_based_position_estimatior/foundation_pose/foundation_pose/lib/FoundationPose
     cutie_library_directory: Moveit_ur5e_ros2-with-cartesian-path-planning/ur5e_ws/src/vision_based_position_estimatior/foundation_pose/foundation_pose/lib/Cutie
-    class_name: blue_tube
-    apply_scale: 0.01
+    class_name: clear
+    apply_scale: 0.001
     force_apply_color: false
     apply_color: [0, 159, 237]
     activate_2d_tracker: true

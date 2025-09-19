@@ -18,9 +18,11 @@ find_package(ur_msgs REQUIRED)
 # Executable
 add_executable(cartesian_control src/cartesian_control.cpp)
 add_executable(cartesian_control_manual src/cartesian_control_manual.cpp)
+add_executable(cartesian_control_pose_stamped src/cartesian_control_pose_stamped.cpp)
 
 target_compile_features(cartesian_control PUBLIC c_std_99 cxx_std_17)
 target_compile_features(cartesian_control_manual PUBLIC c_std_99 cxx_std_17)
+target_compile_features(cartesian_control_pose_stamped PUBLIC c_std_99 cxx_std_17)
 
 target_include_directories(cartesian_control PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -28,6 +30,11 @@ target_include_directories(cartesian_control PUBLIC
 )
 
 target_include_directories(cartesian_control_manual PUBLIC             
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+target_include_directories(cartesian_control_pose_stamped PUBLIC             
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
@@ -51,7 +58,16 @@ ament_target_dependencies(cartesian_control_manual
   tf2_geometry_msgs
 )
 
-install(TARGETS cartesian_control cartesian_control_manual
+ament_target_dependencies(cartesian_control_pose_stamped
+  rclcpp
+  geometry_msgs
+  moveit_ros_planning_interface
+  moveit_visual_tools
+  tf2
+  tf2_geometry_msgs
+)
+
+install(TARGETS cartesian_control cartesian_control_manual cartesian_control_pose_stamped
   DESTINATION lib/${PROJECT_NAME}
 )
 

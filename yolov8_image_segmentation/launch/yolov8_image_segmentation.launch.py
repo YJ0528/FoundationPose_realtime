@@ -88,8 +88,8 @@ def generate_launch_description():
     for action in declare_realsense_params: ld.add_action(action)
     
     ld.add_action(rs_launch_setup)
-    # ld.add_action(yolov8_node)
-    ld.add_action(yolo_multi_object_node)
+    ld.add_action(yolov8_node)
+    # ld.add_action(yolo_multi_object_node)
 
 
     return ld

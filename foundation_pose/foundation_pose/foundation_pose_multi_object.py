@@ -16,6 +16,7 @@ from .kalman_filter_6d import KalmanFilter6D
 import pyrealsense2 as rs
 import logging
 from ultralytics import YOLO
+from hydra.core.global_hydra import GlobalHydra
 
 from std_msgs.msg import Bool, String
 from cv_bridge import CvBridge
@@ -23,13 +24,15 @@ import rclpy
 from rclpy.node import Node
 import sensor_msgs.msg
 from rclpy.executors import ExternalShutdownException
-from geometry_msgs.msg import PointStamped
+from geometry_msgs.msg import PointStamped, PoseStamped
 from ament_index_python.packages import get_package_share_directory
 import message_filters
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDurabilityPolicy
 import tf2_ros
 from tf2_ros import TransformException
 from scipy.spatial.transform import Rotation
+import math
+
 
 class foundationPoseMultiObject(Node):
 
@@ -73,7 +76,7 @@ class foundationPoseMultiObject(Node):
         self.declare_parameter('color_camera_topic', '/camera/camera/color/image_raw')
         self.declare_parameter('aligned_depth_camera_topic', '/camera/camera/aligned_depth_to_color/image_raw')
         self.declare_parameter('class_name', 'blue_tube')
-        self.declare_parameter('apply_scale', 0.01)
+        self.declare_parameter('apply_scale', 0.001)
         self.declare_parameter('force_apply_color', False)
         self.declare_parameter('apply_color', [0, 159, 237])
         self.declare_parameter('foundation_pose_library_directory', 'Moveit_ur5e_ros2-with-cartesian-path-planning/ur5e_ws/src/vision_based_position_estimatior/foundation_pose/foundation_pose/lib')
@@ -114,12 +117,12 @@ class foundationPoseMultiObject(Node):
 
         # Initialize as None
         self.est = {}
-        self.tracker_2D = None
-        self.kf = None
+        self.tracker_2D = {}
+        self.kf = {}
         self.pose_seq = [] 
         self.frame_times = []
-        self.kf_mean = None
-        self.kf_covariance = None
+        self.kf_mean = {}
+        self.kf_covariance = {}
         self.mask = None
         self.frame_count = 0
         self.draw_posed_3d_box = None
@@ -129,6 +132,7 @@ class foundationPoseMultiObject(Node):
         self.bbox = {}
         self.classes_name = []
         self.init_mask_subscriber = {}
+        self.vis_color = None
 
         #################################################
         # Declare subsrciber and publisher
@@ -223,9 +227,10 @@ class foundationPoseMultiObject(Node):
     def init_mask_callback(self, inMsg, class_name):
         
         self.mask = None    
+        self.vis_color = None
         self.class_name = class_name
         # if not (self.depth_updated and self.color_updated): return
-
+        
         self.frame_start_time = time.time()
         self.depth_updated = False
         self.color_updated = False
@@ -236,7 +241,7 @@ class foundationPoseMultiObject(Node):
             #################################################
             self.mask = self.bridge.imgmsg_to_cv2(inMsg, desired_encoding='mono8')
             self.get_logger().info(f"Received mask with shape: {self.mask.shape}")
-
+            
             #################################################
             # Extract rgbd data
             #################################################
@@ -257,8 +262,8 @@ class foundationPoseMultiObject(Node):
 
             pose_arr = self.get_6d_pose_arr_from_mat(pose)
             position = pose_arr[:3]
-            # position[0] +=0.005
             euler = pose_arr[3:]
+            quaternion = Rotation.from_euler('xyz', euler).as_quat() 
             print("Position:", position)
             pose_matrix = self.get_mat_from_6d_pose_arr(pose_arr)
 
@@ -267,13 +272,11 @@ class foundationPoseMultiObject(Node):
             # print("Orientation:", euler)
             # print("Pose:\n", pose)
             print("Pose Matrix:\n", pose_matrix)
-
             if self.activate_kalman_filter:
-                self.kf_mean, self.kf_covariance = self.kf.initiate(pose_arr)
+                self.kf_mean[self.class_name], self.kf_covariance[self.class_name] = self.kf[self.class_name].initiate(pose_arr)
 
             if self.activate_2d_tracker:
-                self.tracker_2D.initialize(color, init_info={"mask": self.mask})
-
+                self.tracker_2D[self.class_name].initialize(color, init_info={"mask": self.mask})
             #################################################
             # Update frame process time
             #################################################
@@ -298,6 +301,19 @@ class foundationPoseMultiObject(Node):
             #################################################
             # Publish target position
             #################################################
+            # output_msg = PoseStamped()
+            # output_msg.header.stamp = self.get_clock().now().to_msg()
+            # output_msg.header.frame_id = "base_link"
+
+            # output_msg.pose.position.x = float(global_position[0])
+            # output_msg.pose.position.y = float(global_position[1])
+            # output_msg.pose.position.z = float(global_position[2])
+            # output_msg.pose.orientation.x = quaternion[0]
+            # output_msg.pose.orientation.y = quaternion[1]
+            # output_msg.pose.orientation.z = quaternion[2]
+            # output_msg.pose.orientation.w = quaternion[3]
+            # self.publisher.publish(output_msg)
+            
             output_msg = PointStamped()
             output_msg.header.stamp = self.get_clock().now().to_msg()
             output_msg.header.frame_id = "base_link" 
@@ -324,7 +340,7 @@ class foundationPoseMultiObject(Node):
         
         if self.mask is None or self.mask.size == 0: return
         if not (self.depth_updated and self.color_updated): return
-
+        # print(self.class_name)
         self.frame_start_time = time.time()
         self.depth_updated = False
         self.color_updated = False
@@ -347,21 +363,21 @@ class foundationPoseMultiObject(Node):
             # Foundation pose estimation
             #################################################
             if self.activate_2d_tracker:
-                bbox_2d = self.tracker_2D.track(color)
+                bbox_2d = self.tracker_2D[self.class_name].track(color)
 
                 if not self.activate_kalman_filter:
-                    self.est.pose_last = self.adjust_pose_to_image_point(
-                        ob_in_cam=self.est.pose_last, K=self.cam_K,
+                    self.est[self.class_name].pose_last = self.adjust_pose_to_image_point(
+                        ob_in_cam=self.est[self.class_name].pose_last, K=self.cam_K,
                         x=bbox_2d[0]+bbox_2d[2]/2, y=bbox_2d[1]+bbox_2d[3]/2
                     )
                 else:
-                    self.kf_mean, self.kf_covariance = self.kf.update(self.kf_mean, self.kf_covariance, self.get_6d_pose_arr_from_mat(self.est.pose_last))
+                    self.kf_mean[self.class_name], self.kf_covariance[self.class_name] = self.kf[self.class_name].update(self.kf_mean[self.class_name], self.kf_covariance[self.class_name], self.get_6d_pose_arr_from_mat(self.est[self.class_name].pose_last))
                     measurement_xy = np.array(self.get_pose_xy_from_image_point(
-                        ob_in_cam=self.est.pose_last, K=self.cam_K,
+                        ob_in_cam=self.est[self.class_name].pose_last, K=self.cam_K,
                         x=bbox_2d[0]+bbox_2d[2]/2, y=bbox_2d[1]+bbox_2d[3]/2
                     ))
-                    self.kf_mean, self.kf_covariance = self.kf.update_from_xy(self.kf_mean, self.kf_covariance, measurement_xy)
-                    self.est.pose_last = torch.from_numpy(self.get_mat_from_6d_pose_arr(self.kf_mean[:6])).unsqueeze(0).to(self.est.pose_last.device)
+                    self.kf_mean[self.class_name], self.kf_covariance[self.class_name] = self.kf[self.class_name].update_from_xy(self.kf_mean[self.class_name], self.kf_covariance[self.class_name], measurement_xy)
+                    self.est[self.class_name].pose_last = torch.from_numpy(self.get_mat_from_6d_pose_arr(self.kf_mean[self.class_name][:6])).unsqueeze(0).to(self.est[self.class_name].pose_last.device)
 
                 pose = self.est[self.class_name].track_one(rgb=color, depth=depth, K=self.cam_K, iteration= self.track_refine_iter)
                 pose_arr = self.get_6d_pose_arr_from_mat(pose)
@@ -376,7 +392,7 @@ class foundationPoseMultiObject(Node):
                 print("Pose Matrix:\n", pose_matrix)
 
                 if self.activate_2d_tracker and self.activate_kalman_filter:
-                    self.kf_mean, self.kf_covariance = self.kf.predict(self.kf_mean, self.kf_covariance)
+                    self.kf_mean[self.class_name], self.kf_covariance[self.class_name] = self.kf[self.class_name].predict(self.kf_mean[self.class_name], self.kf_covariance[self.class_name])
             
            
 
@@ -384,9 +400,9 @@ class foundationPoseMultiObject(Node):
             # Draw box in cv2 visualization
             #################################################
             center_pose = pose @ np.linalg.inv(self.to_origin[self.class_name])
-            vis_color = self.draw_posed_3d_box(self.cam_K, img=color, ob_in_cam= center_pose, bbox = self.bbox[self.class_name])
-            vis_color = self.draw_xyz_axis(
-                vis_color,
+            self.vis_color = self.draw_posed_3d_box(self.cam_K, img=color, ob_in_cam= center_pose, bbox = self.bbox[self.class_name])
+            self.vis_color = self.draw_xyz_axis(
+                self.vis_color,
                 ob_in_cam= center_pose,
                 scale=0.1,
                 K = self.cam_K,
@@ -394,7 +410,8 @@ class foundationPoseMultiObject(Node):
                 transparency=0,
                 is_input_rgb=True,
             )
-            cv2.imshow("Pose Tracking", cv2.cvtColor(vis_color, cv2.COLOR_RGB2BGR))
+            cv2.imshow("Pose Tracking", self.vis_color)
+            # cv2.imshow("Pose Tracking", cv2.cvtColor(self.vis_color, cv2.COLOR_RGB2BGR))
             if cv2.waitKey(1) & 0xFF == ord('q'): return
 
             #################################################
@@ -440,42 +457,48 @@ class foundationPoseMultiObject(Node):
                 class_name, 
                 "mesh", 
                 f"{class_name}.stl")          
+            try:
+                self.get_logger().info(f'Loading mesh from {mesh_file_dir}...')
+                mesh = trimesh.load(os.path.abspath(mesh_file_dir))
+                if isinstance(mesh, trimesh.Scene):
+                    mesh = mesh.dump(concatenate=True)
+                mesh.apply_scale(self.apply_scale)
+                if self.force_apply_color:
+                    mesh = trimesh_add_pure_colored_texture(mesh, color=np.array(self.apply_color), resolution=10)
+                self.to_origin[class_name], extents = trimesh.bounds.oriented_bounds(mesh)
+                self.bbox[class_name] = np.stack([-extents / 2, extents / 2], axis=0).reshape(2, 3)
 
-            self.get_logger().info(f'Loading mesh from {mesh_file_dir}...')
-            mesh = trimesh.load(os.path.abspath(mesh_file_dir))
-            if isinstance(mesh, trimesh.Scene):
-                mesh = mesh.dump(concatenate=True)
-            mesh.apply_scale(self.apply_scale)
-            if self.force_apply_color:
-                mesh = trimesh_add_pure_colored_texture(mesh, color=np.array(self.apply_color), resolution=10)
-            self.to_origin[class_name], extents = trimesh.bounds.oriented_bounds(mesh)
-            self.bbox[class_name] = np.stack([-extents / 2, extents / 2], axis=0).reshape(2, 3)
+                self.est[class_name] = FoundationPose(
+                    model_pts=mesh.vertices,
+                    model_normals=mesh.vertex_normals,
+                    mesh=mesh,
+                    scorer=scorer,
+                    refiner=refiner,
+                    glctx=glctx,
+                )
+ 
+                #################################################
+                # Instantiate the 2D tracker
+                #################################################
 
-            self.est[class_name] = FoundationPose(
-                model_pts=mesh.vertices,
-                model_normals=mesh.vertex_normals,
-                mesh=mesh,
-                scorer=scorer,
-                refiner=refiner,
-                glctx=glctx,
-            )
-        
-        #################################################
-        # Instantiate the 2D tracker
-        #################################################
+                if self.activate_2d_tracker:     # Default using Cutie as a 2D tracker
+                    if GlobalHydra().is_initialized():
+                        GlobalHydra.instance().clear()
+                    self.tracker_2D[class_name] = Cutie()
+                else:
+                    self.tracker_2D[class_name] = Tracker_2D()
 
-        if self.activate_2d_tracker:     # Default using Cutie as a 2D tracker
-            self.tracker_2D = Cutie()
-        else:
-            self.tracker_2D = Tracker_2D()
+                #################################################
+                # 6D pose tracking
+                #################################################
 
+                if self.activate_kalman_filter:
+                    self.kf[class_name] = KalmanFilter6D(self.kf_measurement_noise_scale)
+              
 
-        #################################################
-        # 6D pose tracking
-        #################################################
-
-        if self.activate_kalman_filter:
-            self.kf = KalmanFilter6D(self.kf_measurement_noise_scale)
+            except Exception as e:
+                self.get_logger().warn(f'Failed to load mesh for {class_name}: {str(e)}')
+                continue
 
     def adjust_pose_to_image_point(
             self,
