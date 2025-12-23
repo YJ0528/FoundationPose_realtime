@@ -104,5 +104,26 @@ Open 2 Jetson Orin Nano ssh terminal
     *   Enter pos:{position} to control the position (e.g. pos:100)
     *   Enter move:{distance} to move the gripper a relative distance (e.g. move:100)
 
-
+## (Alternative) Move the Robot without Moveit:
+1.  With the `ur_robot_driver` turned on and connected via URCaps, turn on the `scaled_joint_trajectory_controller`
+    *   ```
+        ros2 control switch_controllers --activate scaled_joint_trajectory_controller
+        ```
+    Check activated controller using:
+    *   ```
+        ros2 control list_controllers
+        ```
+2.  Control the joint angle via the topic
+    * via terminal (for example):
+        ```
+        ros2 topic pub /scaled_joint_trajectory_controller/joint_trajectory trajectory_msgs/msg/JointTrajectory "{
+        header: {stamp: {sec: 0, nanosec: 0}},
+        joint_names: ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint'],
+        points: [{
+            positions: [0.6515496373176575, -0.7259034675410767, 0.5065854231463831, 1.7610785204121093, 1.5376534461975098, 0.5],
+            velocities: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            time_from_start: {sec: 2, nanosec: 0}
+        }]
+        }"
+        ```
 
